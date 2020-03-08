@@ -1,0 +1,60 @@
+apply plugin: 'java-library'
+apply plugin: 'java'
+apply plugin: 'application'
+
+mainClassName = 'cs223w2020.Experiment'
+
+
+version = 0.1
+sourceCompatibility = 1.11
+
+sourceSets {
+   main {
+      java {
+         srcDir 'src'
+      }
+      resources {
+         srcDirs 'resources'
+      }
+   }
+	
+   test {
+      java {
+         srcDir 'test'
+      }
+   }
+}
+
+repositories {
+   jcenter()
+   mavenCentral()
+}
+
+dependencies {
+   compile 'org.slf4j:slf4j-api:1.7.12'
+   compile 'net.sourceforge.argparse4j:argparse4j:0.8.1'
+   compile 'org.apache.commons:commons-csv:1.7'
+   compile 'com.zaxxer:HikariCP:3.4.1'
+   compile 'mysql:mysql-connector-java:8.0.19'
+   compile 'org.postgresql:postgresql:42.2.5'
+}
+
+
+// jar {
+//    manifest {
+//       attributes 'Main-Class': 'cs223w2020.Experiment',
+//       "Class-Path": configurations.compile.collect { it.getName() }.join(' ')
+//    }
+// }
+
+task fatJar(type: Jar) {
+	manifest {
+        attributes 'Implementation-Title': 'CS223 W2020 Project Part 1',  
+        	'Implementation-Version': version,
+        	'Main-Class': 'cs223w2020.Experiment',
+         "Class-Path": configurations.compile.collect { it.getName() }.join(' ')
+    }
+    baseName = project.name + '-all'
+    from { configurations.compile.collect { it.isDirectory() ? it : zipTree(it) } }
+    with jar
+}

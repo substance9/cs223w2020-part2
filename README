@@ -1,0 +1,37 @@
+Supported OS: Linux / macOS
+
+Required Softwares:
+Bash
+Gradle: (version: 6.0+)
+Java (JDK): (version: 11+)
+Docker (version: 19+)
+PostgreSQL DB (Version: 12)
+MySQL DB (Version: 8.0.19)
+(optional) Python 2
+(optional) Python 3 along with pandas, matplotlib
+
+The whole experiment program is designed to be portable. The DB software runs in docker containers and exposes the ports to the host machine for the experiment program to connect with. The experiment program is written in Java and the dependency packages and compilation/build process are managed by Gradle. Python scripts are used to analyze and plot the results.
+
+Please follow the following steps to set up the environment and run the experiments:
+
+Initiate the directories:
+./init_dir.sh
+
+Start DB software:
+PostgreSQL: ./start_postgres.sh
+MySQL: ./start_mysql.sh
+
+Copy the data files (data/schema/queries) into the inputs folder
+Create tables and populate meta-data for all DBs and all workloads(low/high concurrency):
+./init_all_db.sh
+(You could also run the script to create tables and populate meta-data for each individual DB and workload)
+
+Modify the experiment parameters in the properties file at:
+./experiment/src/main/resources/experiment.properties
+(it is possible to pass the experiment parameters to the program using command-line arguments)
+
+Run experiment:
+Go to the experiment program folder: cd experiment 
+
+Run an experiment: ./buildrun.sh
+The result is stored under the results folder

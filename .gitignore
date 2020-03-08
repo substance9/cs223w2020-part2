@@ -1,0 +1,12 @@
+.DS_Store
+postgres_data/
+mysql_data/
+inputs/
+*/.gradle/
+.gradle/
+*/build/
+*/experiment.properties
+results/
+*/output.txt
+*.csv
+*.txt
