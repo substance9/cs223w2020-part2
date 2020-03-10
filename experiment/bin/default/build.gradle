@@ -2,7 +2,8 @@ apply plugin: 'java-library'
 apply plugin: 'java'
 apply plugin: 'application'
 
-mainClassName = 'cs223w2020.coordinator.Coordinator'
+mainClassName = 'cs223w2020.Experiment'
+
 
 version = 0.1
 sourceCompatibility = 1.11
@@ -10,10 +11,10 @@ sourceCompatibility = 1.11
 sourceSets {
    main {
       java {
-         srcDir 'src/main/java'
+         srcDir 'src'
       }
       resources {
-         srcDirs 'src/resources'
+         srcDirs 'resources'
       }
    }
 	
@@ -47,26 +48,14 @@ dependencies {
 //    }
 // }
 
-task buildCoordinator(type: Jar) {
+task fatJar(type: Jar) {
 	manifest {
-        attributes 'Implementation-Title': 'CS223 W2020 Project Part 2 - Coordinator',  
+        attributes 'Implementation-Title': 'CS223 W2020 Project Part 1',  
         	'Implementation-Version': version,
-        	'Main-Class': 'cs223w2020.coordinator.Coordinator',
+        	'Main-Class': 'cs223w2020.Experiment',
          "Class-Path": configurations.compile.collect { it.getName() }.join(' ')
     }
-    baseName = project.name + '-coordinator-all'
-    from { configurations.compile.collect { it.isDirectory() ? it : zipTree(it) } }
-    with jar
-}
-
-task buildAgent(type: Jar) {
-	manifest {
-        attributes 'Implementation-Title': 'CS223 W2020 Project Part 2 - Agent',  
-        	'Implementation-Version': version,
-        	'Main-Class': 'cs223w2020.agent.Agent',
-         "Class-Path": configurations.compile.collect { it.getName() }.join(' ')
-    }
-    baseName = project.name + '-agent-all'
+    baseName = project.name + '-all'
     from { configurations.compile.collect { it.isDirectory() ? it : zipTree(it) } }
     with jar
 }

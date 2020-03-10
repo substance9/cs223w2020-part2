@@ -1,10 +1,11 @@
-package main.java.cs223w2020.model;
+package cs223w2020.model;
 
 import java.sql.Timestamp;
 import java.util.Date;
 import java.util.ArrayList;
 
 public class Transaction {
+    public int transactionId;
     public Timestamp constructTime;
     public Timestamp beginTime;
     public Timestamp endTime;

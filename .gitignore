@@ -1,4 +1,5 @@
 .DS_Store
+.vscode/
 postgres_data/
 mysql_data/
 inputs/

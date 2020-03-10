@@ -1,4 +1,4 @@
-package main.java.cs223w2020.model;
+package cs223w2020.model;
 
 import java.sql.Timestamp;
 import java.util.Date;
