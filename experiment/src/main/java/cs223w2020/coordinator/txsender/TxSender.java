@@ -8,7 +8,9 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.Properties;
 import java.util.concurrent.ExecutorService; 
-import java.util.concurrent.Executors; 
+import java.util.concurrent.Executors;
+
+import com.google.protobuf.Extension.MessageType;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 import java.util.concurrent.TimeUnit;
@@ -17,6 +19,7 @@ import cs223w2020.coordinator.OperationQueue;
 import cs223w2020.coordinator.TransactionQueue;
 import cs223w2020.model.Operation;
 import cs223w2020.model.Transaction;
+import cs223w2020.model.Message;
 
 public class TxSender implements Runnable 
 { 
@@ -62,13 +65,28 @@ public class TxSender implements Runnable
     }
 
     public void processTxIn2PC(Transaction tx){
+        System.out.println("-------------------------------------------------");
+        System.out.println("Started Processing New Transaction in 2PC Protocol" + " | Tx ID: " + String.valueOf(tx.transactionId));
         System.out.println(tx.toString());
         for (int i = 0; i < tx.operations.size(); i ++){
             Operation op = tx.operations.get(i);
             int agentId = getCorrespondAgentId(op);
             AgentClient aclient = agentClientList.get(agentId);
-            aclient.addSqlToSendQueue(op.sqlStr);
+            Message stnMsg = new Message(Message.MessageType.STATEMENT, tx.transactionId);
+            stnMsg.setSql(op.sqlStr);
+            aclient.addMsgToSendQueue(stnMsg);
         }
+
+        Message prepareMsg = new Message(Message.MessageType.PREPARE, tx.transactionId);
+        for (int i = 0; i < agentClientList.size(); i++){
+            AgentClient aclient = agentClientList.get(i);
+            aclient.addMsgToSendQueue(prepareMsg);
+        }
+
+
+        // should block here to wait for voting
+
+        
     }
 
     public void run() 

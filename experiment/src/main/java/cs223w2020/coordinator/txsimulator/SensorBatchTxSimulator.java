@@ -9,25 +9,33 @@ import cs223w2020.model.Transaction;
 import cs223w2020.coordinator.OperationQueue;
 import cs223w2020.coordinator.TransactionQueue;
 
-public class SimpleBatchTxSimulator extends TxSimulator 
+public class SensorBatchTxSimulator extends TxSimulator 
 {
-    public LinkedList<Operation> opList;
-
-    public SimpleBatchTxSimulator(OperationQueue opQueue, TransactionQueue txQueue){
+    public SensorBatchTxSimulator(OperationQueue opQueue, TransactionQueue txQueue){
         super(opQueue, txQueue);
-        opList = new LinkedList<Operation>();
+        opListMap = new HashMap<String, LinkedList<Operation>>();
     }
 
-    private int BATCHSIZE = 20;
+    private OperationQueue opQueue;
+
+    private int BATCHSIZE = 5;
+
+    private HashMap<String, LinkedList<Operation>> opListMap;
 
     @Override
     public void processNewOperation(Operation op){
-        if (opList.size() < BATCHSIZE){
+        if(opListMap.containsKey(op.sensorId)){
+            LinkedList<Operation> opList = opListMap.get(op.sensorId);
             opList.add(op);
+            if (opList.size() >= BATCHSIZE){
+                formAndSendTransaction(opList);
+                opListMap.remove(op.sensorId);
+            }
         }
         else{
-            formAndSendTransaction(opList);
-            opList = new LinkedList<Operation>();
+            LinkedList<Operation> opList = new LinkedList<Operation>();
+            opList.add(op);
+            opListMap.put(op.sensorId,opList);
         }
     }
 

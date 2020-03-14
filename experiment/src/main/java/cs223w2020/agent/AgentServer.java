@@ -7,12 +7,43 @@ import java.io.PrintWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import cs223w2020.model.Message;
+
 public class AgentServer {
     private ServerSocket serverSocket;
     private Socket clientSocket;
     private PrintWriter out;
     private BufferedReader in;
     int app_port;
+
+    public String serializeObj(Object obj){
+        ObjectMapper mapper = new ObjectMapper();
+        String msg = null;
+        try {
+            msg = mapper.writeValueAsString(obj);
+        } catch (JsonProcessingException e) {
+            e.printStackTrace();
+        }
+        return msg;
+    }
+
+    public Message deserializeStr(String str){
+        ObjectMapper mapper = new ObjectMapper();
+        Message msg = null;
+        try {
+            msg = mapper.readValue(str, Message.class);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return msg;
+    }
+
+    private void processMsg(Message msg){
+        System.out.println(msg);
+    }
 
     public void start(int port) {
         app_port = port;
@@ -21,7 +52,6 @@ public class AgentServer {
         try {
             serverSocket = new ServerSocket(port);
         } catch (IOException e1) {
-            // TODO Auto-generated catch block
             e1.printStackTrace();
         }
 
@@ -29,7 +59,6 @@ public class AgentServer {
         try {
             clientSocket = serverSocket.accept();
         } catch (IOException e1) {
-            // TODO Auto-generated catch block
             e1.printStackTrace();
         }
 
@@ -37,28 +66,30 @@ public class AgentServer {
         try {
             out = new PrintWriter(clientSocket.getOutputStream(), true);
         } catch (IOException e1) {
-            // TODO Auto-generated catch block
             e1.printStackTrace();
         }
 
         try {
             in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
         } catch (IOException e1) {
-            // TODO Auto-generated catch block
             e1.printStackTrace();
         }
 
         System.out.println("Start recving messages");
-        String recvdStr = "";
+        String recvdStr = null;
+        //main loop starts
         while(true){
             try {
                 recvdStr = in.readLine();
             } catch (IOException e) {
-                // TODO Auto-generated catch block
                 e.printStackTrace();
             }
 
-            System.out.println(recvdStr);
+            if (recvdStr==null){continue;}
+
+            Message recvMsg = deserializeStr(recvdStr);
+
+            processMsg(recvMsg);
         }
         
     }
@@ -67,7 +98,6 @@ public class AgentServer {
         try {
             in.close();
         } catch (IOException e) {
-            // TODO Auto-generated catch block
             e.printStackTrace();
         }
         out.close();

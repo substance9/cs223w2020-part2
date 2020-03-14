@@ -7,7 +7,9 @@ inputs/
 .gradle/
 */build/
 */experiment.properties
+experiment/bin
 results/
 */output.txt
 *.csv
 *.txt
+*.class

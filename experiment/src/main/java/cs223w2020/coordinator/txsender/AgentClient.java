@@ -9,6 +9,11 @@ import java.net.UnknownHostException;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import cs223w2020.model.Message;
+
 class AgentClient implements Runnable {
     private String host = "127.0.0.1";
     private int port;
@@ -16,16 +21,16 @@ class AgentClient implements Runnable {
     private PrintWriter out;
     private BufferedReader in;
 
-    private BlockingQueue<String> sqlQueue;
+    private BlockingQueue<Message> msgQueue;
 
     public AgentClient(int port) {
         this.port = port;
-        sqlQueue = new LinkedBlockingQueue<String>();
+        msgQueue = new LinkedBlockingQueue<Message>();
     }
 
-    public void addSqlToSendQueue(String sqlStr) {
+    public void addMsgToSendQueue(Message msg) {
         try {
-            sqlQueue.put(sqlStr);
+            msgQueue.put(msg);
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
@@ -43,28 +48,66 @@ class AgentClient implements Runnable {
 
     }
 
-    public String sendMessage(String msg) {
-        out.println(msg);
+    public void sendMessage(Message msg) {
+        String msgStr = serializeObj(msg);
+
+        out.println(msgStr);
         // String resp;
         // try {
         // resp = in.readLine();
         // } catch (IOException e) {
         // e.printStackTrace();
         // }
-        return "";
+    }
+
+    public Message recvMessageBlocking(){
+        String resp = null;
+        Message respMsg = null;
+
+        try {
+            resp = in.readLine();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        respMsg = deserializeStr(resp);
+
+        return respMsg;
+    }
+
+    public String serializeObj(Object obj){
+        ObjectMapper mapper = new ObjectMapper();
+        String msg = null;
+        try {
+            msg = mapper.writeValueAsString(obj);
+        } catch (JsonProcessingException e) {
+            e.printStackTrace();
+        }
+        return msg;
+    }
+
+    public Message deserializeStr(String str){
+        ObjectMapper mapper = new ObjectMapper();
+        Message msg = null;
+        try {
+            msg = mapper.readValue(str, Message.class);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return msg;
     }
 
     public void run() {
         while (true) {
             // 1. get the transaction from queue
-            String sqlStr = "";
+            Message msg = null;
             try {
-                sqlStr = sqlQueue.take();
+                msg = msgQueue.take();
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
-            if (sqlStr.length() > 1){
-                sendMessage(sqlStr);
+            if (msg!=null){
+                sendMessage(msg);
             }
             else{
                 //end mark transaction

@@ -61,8 +61,8 @@ public class TxProcessor implements Runnable
         threadPool = Executors.newFixedThreadPool(mpl); 
 
         resQueue = new TransactionQueue();
-        resultAggregator = new Thread(new ResultAggregator(resQueue, resOutputDir)); 
-        resultAggregator.start(); 
+        //resultAggregator = new Thread(new ResultAggregator(resQueue, resOutputDir)); 
+        //resultAggregator.start(); 
     }
 
     public Properties getHikariDbProperties(String dbName){

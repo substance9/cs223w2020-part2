@@ -1,35 +1,63 @@
 package cs223w2020.model;
 
-import java.sql.Timestamp;
-import java.util.ArrayList;
-import java.util.Date;
-
 public class Message {
-    public String type;
-    //STATEMENTS
-    //PREPARE
-    //VOTE:PREPARED/ABORT
-    //COMMIT
-    //ABORT
-    //ACK
+    public enum MessageType {
+        STATEMENT, PREPARE, VOTEPREPARED, VOTEABORT,
+        ACTCOMMIT, ACTABORT, ACK 
+    }
+        //c->a:STATEMENT
+        //c->a:PREPARE
+        //a->c:VOTE:PREPARED/ABORT
+        //c->a:COMMIT
+        //c->a:ABORT
+        //a->c:ACK
+
+    public MessageType type;
     
     public int transactionId;
-    public ArrayList<String> sqlList;
+    public String sql;
     
-    public Message(String typeStr, int transactionId){
-        this.type = typeStr;
+    public Message(MessageType t, int transactionId){
+        this.type = t;
         this.transactionId = transactionId;
-        sqlList = new ArrayList<String>();
     }
 
-    // @Override
-    // public String toString()
-    // {
-    //      return "Operation: " + operationStr + " - Timestamp: " + timestamp.toLocalDateTime() + " - SensorID: "  + sensorId + " - SQLStr: "  + sqlStr;
-    // }
+    public Message(){
+    }
+    
+    public void setSql(String sqlStr){
+        this.sql = sqlStr;
+    }
 
-    public void appendSql(String sql){
-        sqlList.add(sql);
+    @Override
+    public String toString(){
+        if (type == MessageType.STATEMENT){
+            return("Message for Transaction <"+String.valueOf(transactionId)+"> | Message Type: " + type.toString() + " | SQL: " + sql);
+        }
+        else{
+            return("Message for Transaction <"+String.valueOf(transactionId)+"> | Message Type: " + type.toString());
+        }
+        
+    }
+
+    public MessageType getType() {
+        return type;
+    }
+
+    public void setType(MessageType type) {
+        this.type = type;
+    }
+
+    public int getTransactionId() {
+        return transactionId;
+    }
+
+    public void setTransactionId(int transactionId) {
+        this.transactionId = transactionId;
+    }
+
+    public String getSql() {
+        return sql;
     }
 
 }
