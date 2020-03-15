@@ -7,6 +7,8 @@ from datetime import datetime
 from signal import signal, SIGINT
 from sys import exit
 
+PROJECT_DIR_PATH = "/home/guoxi/Workspace/cs223w2020-part2"
+
 COORDINATOR_DB_PORT = 10009
 AGENT_DB_PORTS_STARTS_AT = 10010
 AGENT_APP_PORTS_STARTS_AT = 20010
@@ -68,7 +70,7 @@ def start_db_containers(num_agents):
 
 
 def init_dbs(num_agents):
-    os.chdir("/home/guoxi/Workspace/cs223w2020-part2")
+    os.chdir(PROJECT_DIR_PATH)
     #TODO: init coordinator db (for logging)
     for agent_id in range(num_agents):
         #TODO: init log db for agents
@@ -81,7 +83,7 @@ def runexp(mpl, num_agents, simulated_error, error_transaction_id):
     #start_db_containers(num_agents)
     #init_dbs(num_agents)
 
-    os.chdir("/home/guoxi/Workspace/cs223w2020-part2/experiment")
+    os.chdir(PROJECT_DIR_PATH + "/experiment")
     subprocess.call(["gradle","clean"])
     subprocess.call(["gradle","buildCoordinator"])
     subprocess.call(["gradle","buildAgent"])
@@ -89,7 +91,7 @@ def runexp(mpl, num_agents, simulated_error, error_transaction_id):
     now = datetime.now()
     experiment_id = now.strftime("%Y-%m-%d-%H-%M-%S")
 
-    output_dir = "/home/guoxi/Workspace/cs223w2020-part2/results/" + "errID_" + str(simulated_error) + "|transID_" + str(error_transaction_id) + "|expID_" + experiment_id
+    output_dir = PROJECT_DIR_PATH + "/results/" + "errID_" + str(simulated_error) + "|transID_" + str(error_transaction_id) + "|expID_" + experiment_id
     pathlib.Path(output_dir).mkdir(parents=True, exist_ok=True)
     pathlib.Path(output_dir + "/transactions").mkdir(parents=True, exist_ok=True)
 
