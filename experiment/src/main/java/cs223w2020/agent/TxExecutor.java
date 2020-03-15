@@ -94,14 +94,4 @@ public class TxExecutor
         return result;
     }
 
-    public void closeTransaction(){
-        try {
-            dbCon.close();
-            txControlCon.close();
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
-    }
-
-    
 } 

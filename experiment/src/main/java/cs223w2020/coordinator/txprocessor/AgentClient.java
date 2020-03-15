@@ -26,15 +26,15 @@ class AgentClient implements Runnable {
     private PrintWriter out;
     private BufferedReader in;
 
-    public HashMap<Integer, Tx2PCCoordinator> tx2PCProcessorMap;
+    private TxProcessor txProcessor;
 
     private BlockingQueue<Message> msgSendQueue;
 
-    public AgentClient(int id, int port, HashMap<Integer, Tx2PCCoordinator> processorMap) {
+    public AgentClient(int id, int port, TxProcessor txProcessor) {
         this.agentId = id;
         this.port = port;
         msgSendQueue = new LinkedBlockingQueue<Message>();
-        this.tx2PCProcessorMap = processorMap;
+        this.txProcessor = txProcessor;
     }
 
     public void addMsgToSendQueue(Message msg) {
@@ -118,8 +118,8 @@ class AgentClient implements Runnable {
         if (msgType == MessageType.QUERY) {
             ;
         } else {
-            Tx2PCCoordinator txProcessor = tx2PCProcessorMap.get(recvMsg.transactionId);
-            txProcessor.addRecvMessage(recvMsg);
+            Tx2PCCoordinator tx2PCProcessor = this.txProcessor.syncProcessorMapGet(recvMsg.transactionId);
+            tx2PCProcessor.addRecvMessage(recvMsg);
         }
     }
 

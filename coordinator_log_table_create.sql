@@ -1,0 +1,4 @@
+CREATE TABLE COORDINATOR_TX_LOG (
+  TID integer NOT NULL,
+  STAT integer NOT NULL
+) ;

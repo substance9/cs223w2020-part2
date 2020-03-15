@@ -72,12 +72,17 @@ def start_db_containers(num_agents):
 
 def init_dbs(num_agents):
     os.chdir(PROJECT_DIR_PATH)
-    #TODO: init coordinator db (for logging)
+    #Init coordinator db (for logging)
+    print("Initiate DB (for log) for coordinator ")
+    call_cmd(["./init_coordinator_postgres_log.sh",str(COORDINATOR_DB_PORT)])
+
     for agent_id in range(num_agents):
-        #TODO: init log db for agents
-        print("Initiate DB for agent "+ str(agent_id))
+        #init DBs (data & log) for agents
+        print("Initiate DB (data) for agent "+ str(agent_id))
         agent_db_port = AGENT_DB_PORTS_STARTS_AT + agent_id 
-        call_cmd(["./init_postgres_low_concurrency.sh",str(agent_db_port)])
+        call_cmd(["./init_cohort_postgres_low_concurrency.sh",str(agent_db_port)])
+        print("Initiate Log DB (log) for agent "+ str(agent_id))
+        call_cmd(["./init_cohort_postgres_log.sh",str(agent_db_port)])
 
 def runexp(mpl, num_agents, simulated_error, error_transaction_id, skip_db_init, num_of_tx_in_total):
     if(skip_db_init is False):
@@ -128,6 +133,8 @@ def runexp(mpl, num_agents, simulated_error, error_transaction_id, skip_db_init,
                             "-i", experiment_id,\
                             "-e", str(simulated_error),\
                             "-t", str(error_transaction_id)], coordinator_output_file)
+    print("Coordinator Process Starts, It will load all insertion statements into memory first, it will take some time to finish loading first (roughly 1-2 minutes for low concurrency dataset on a machine with SSD) ")
+    print("Please find the 'result' directory for the stdout output for coordinator and agent. 'result/transaction' has the output log for the transaction 2PC execution on both coordinator and agent")
     proc_list.append(coordinator_proc)
 
     while(True):
@@ -137,4 +144,4 @@ def runexp(mpl, num_agents, simulated_error, error_transaction_id, skip_db_init,
 
 print("Please make sure the clean_exp.py is executed to remove the previous DB containers and volumes")
 
-runexp(mpl=2, num_agents=3,simulated_error=0,error_transaction_id=10,skip_db_init=False,num_of_tx_in_total=10)
+runexp(mpl=2,num_agents=3,simulated_error=0,error_transaction_id=10,skip_db_init=False,num_of_tx_in_total=10)

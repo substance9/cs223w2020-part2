@@ -46,6 +46,9 @@ public class AgentServer {
     public HikariDataSource dataDBConnectionPool;
 
     public HashMap<Integer, Tx2PCCohort> txCohortMap;
+    public enum HashMapSyncOp{
+        PUT, REMOVE
+    }
 
     public AgentServer(int agentId, int mpl, int appPort, int dbPort, String resultDir) {
         this.agentId = agentId;
@@ -64,12 +67,21 @@ public class AgentServer {
 
         System.out.println("Preparing to connect to DB for data storage: " + dataJdbcUrl);
 
-        // TODO: DB COnnection
+        // Data DB COnnection
         HikariConfig dataDbCfg = new HikariConfig(prop);
         dataDbCfg.setJdbcUrl(dataJdbcUrl);
         dataDbCfg.setMaximumPoolSize(mpl*2+1);
         dataDbCfg.setAutoCommit(false);
         dataDBConnectionPool = new HikariDataSource(dataDbCfg);
+
+        // Data DB COnnection
+        String logJdbcUrl = jdbcUrlBase + ":" + String.valueOf(dbPort) + "/cs223w2020_cohort_log";
+
+        HikariConfig logDbCfg = new HikariConfig(prop);
+        logDbCfg.setJdbcUrl(logJdbcUrl);
+        logDbCfg.setMaximumPoolSize(mpl+1);
+        logDbCfg.setAutoCommit(true);
+        logDBConnectionPool = new HikariDataSource(logDbCfg);
 
         tx2PCCohortThreadPool = Executors.newFixedThreadPool(mpl);
     }
@@ -223,6 +235,15 @@ public class AgentServer {
         }
     }
 
+    public synchronized void syncChangeToTxCohortMap(HashMapSyncOp op, int tid, Tx2PCCohort txCohort){
+        if(op == HashMapSyncOp.PUT){
+            txCohortMap.put(tid, txCohort);
+        }
+        if(op == HashMapSyncOp.REMOVE){
+            txCohortMap.remove(tid);
+        }
+    }
+
     private void processMsg(Message msg) {
         // System.out.println(msg);
 
@@ -238,17 +259,16 @@ public class AgentServer {
                 return;
             }
             int newTxId = msg.transactionId;
-                // TODO: DB COnnection
-                // try{
-                //     //System.out.println("try executing");
-                //     logDbCon = dBConnectionPool.getConnection();
-                //     logDbCon.setAutoCommit(true);
-                // }catch (SQLException ex){
-                //     System.out.println(tx.operations.get(0).sqlStr);
-                //     ex.printStackTrace();
-                // }
+                //  Log DB COnnection
+            try{
+                //System.out.println("try executing");
+                logDbCon = logDBConnectionPool.getConnection();
+                logDbCon.setAutoCommit(true);
+            }catch (SQLException ex){
+                ex.printStackTrace();
+            }
             Tx2PCCohort txCohort = new Tx2PCCohort(agentId, newTxId, logDbCon, dataDbCon, dataDbTxControlCon, this, resultDir);
-            txCohortMap.put(newTxId, txCohort);
+            syncChangeToTxCohortMap(HashMapSyncOp.PUT, newTxId, txCohort);
             tx2PCCohortThreadPool.execute(txCohort);
             System.out.println("Create new 2PC Cohort Thread for transaction" + String.valueOf(newTxId));
         }

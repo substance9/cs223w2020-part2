@@ -1,7 +1,6 @@
 #!/bin/bash
 
 echo "Creating DB"
-echo "PGPASSWORD=password psql -h localhost -p " $1 "-U postgres -c \"create database cs223w2020_low_concurrency;\""
 PGPASSWORD=password psql -h localhost -p $1 -U postgres -c "create database cs223w2020_low_concurrency;"
 
 echo "Initiate Schema"

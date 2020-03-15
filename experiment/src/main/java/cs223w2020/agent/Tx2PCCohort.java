@@ -1,9 +1,12 @@
 package cs223w2020.agent;
 
 import java.sql.Connection;
+import java.sql.SQLException;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
+import cs223w2020.agent.AgentServer.HashMapSyncOp;
+import cs223w2020.agent.CohortTxLogger.CohortTxState;
 import cs223w2020.model.Message;
 import cs223w2020.model.Message.MessageType;
 import cs223w2020.util.ResultFileLogger;
@@ -21,11 +24,13 @@ public class Tx2PCCohort implements Runnable
 
     private String resultLogFileName;
     private ResultFileLogger resultLogger;
+    private CohortTxLogger cohortTxLogger;
 
     public Tx2PCCohort(int agentId, int tid, Connection logDbCon, Connection dataDbCon, Connection controlCon, AgentServer aServer, String resultDir){
         this.agentId = agentId;
         this.dataDbConnection = dataDbCon;
         this.dataDbTxControlCon = controlCon;
+        this.logDbConnection = logDbCon;
         this.transactionId = tid;
         this.recvMessageQueue = new LinkedBlockingQueue<Message>();
         this.agentServer = aServer;
@@ -37,6 +42,7 @@ public class Tx2PCCohort implements Runnable
 
     public void processTxIn2PC(){
         resultLogger = new ResultFileLogger(this.resultLogFileName);
+        cohortTxLogger = new CohortTxLogger(transactionId, logDbConnection);
         TxExecutor txExecutor = new TxExecutor(transactionId, dataDbConnection, dataDbTxControlCon);
         resultLogger.writeln("-------------------------------------------------");
         resultLogger.writeln("Started Processing New Transaction in 2PC Protocol" + " | Tx ID: " + String.valueOf(transactionId));
@@ -55,13 +61,23 @@ public class Tx2PCCohort implements Runnable
 
         if(recvMsg.type==MessageType.PREPARE){
             resultLogger.writeln("Receive PREPARE");
-            //TODO:PREPARE work
+            //PREPARE work
             if (txExecutor.prepareTransaction() != true){
-                resultLogger.writeln("PREPARE Fail");
+                resultLogger.writeln("PREPARE Fail, send vote (ABORT) message to Coordinator");
+                Message abortMsg = new Message(MessageType.VOTEABORT, transactionId);
+                sendMessage(abortMsg);
+            } else {
+                resultLogger.writeln("PREPARED, Log PREPARED state first");
+                //PREPARED force log
+                int numLogsInserted = cohortTxLogger.writeTxLog(CohortTxState.PREPARED);
+                if (numLogsInserted != 1){
+                    resultLogger.writeln("Log PREPARED write failed");
+                }else{
+                    resultLogger.writeln("Send vote (PREPARED) message to Coordinator");
+                    Message preparedMsg = new Message(MessageType.VOTEPREPARED, transactionId);
+                    sendMessage(preparedMsg);
+                }
             }
-            resultLogger.writeln("PREPARED, send vote message to Coordinator");
-            Message preparedMsg = new Message(MessageType.VOTEPREPARED, transactionId);
-            sendMessage(preparedMsg);
         }else{
             resultLogger.writeln("ERROR: Receive Unexpected Message Type When Need PREPARE, Wrong Type: " + String.valueOf(recvMsg.type));
         }
@@ -79,23 +95,29 @@ public class Tx2PCCohort implements Runnable
                 //TODO:COMMIT Work
                 if (txExecutor.commitTransaction() != true){
                     resultLogger.writeln("Commit Fail");
+                } else {
+                    resultLogger.writeln("Commit Success, Write Completion Log First");
+                    int numLogsInserted = cohortTxLogger.writeTxLog(CohortTxState.PREPARED);
+                    if (numLogsInserted == 1){
+                        sendMessage(ackMsg);
+                        resultLogger.writeln("ACK is sent to Coordinator");
+                    } else {
+                        resultLogger.writeln("Log PREPARED write failed");
+                    }
                 }
-                sendMessage(ackMsg);
-                resultLogger.writeln("ACK is sent to Coordinator");
             }else if(decisionMsg.type==MessageType.ACTABORT) {
                 resultLogger.writeln("Coordinator's Decision is ABORT");
                 if (txExecutor.rollbackTransaction() != true){
                     resultLogger.writeln("Rollback Fail");
+                }else{
+                    sendMessage(ackMsg);
+                    resultLogger.writeln("ACK is sent to Coordinator");
                 }
-                sendMessage(ackMsg);
-                resultLogger.writeln("ACK is sent to Coordinator");
+                
             }else{
                 resultLogger.writeln("ERROR: Receive Wrong type of Message while waiting for Decision. Wrong Message Type: " + String.valueOf(decisionMsg.type));
             }
-        }
-
-        txExecutor.closeTransaction();
-        
+        }        
     }
 
     public void addRecvMessage(Message msg){
@@ -125,5 +147,15 @@ public class Tx2PCCohort implements Runnable
     {
         processTxIn2PC();
         resultLogger.close();
+
+        try {
+            dataDbConnection.close();
+            logDbConnection.close();
+            dataDbTxControlCon.close();
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+
+        agentServer.syncChangeToTxCohortMap(HashMapSyncOp.REMOVE, transactionId, null);
     }
 } 
