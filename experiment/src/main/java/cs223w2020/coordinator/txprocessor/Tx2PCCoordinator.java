@@ -5,6 +5,7 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
 
 import cs223w2020.coordinator.txprocessor.CoordinatorTxLogger.CoordinatorTxState;
 import cs223w2020.coordinator.txprocessor.ProtocolDbTxEntry.CohortsState;
@@ -32,6 +33,9 @@ public class Tx2PCCoordinator implements Runnable {
 
     private TxProcessor txProcessor;
 
+    private long voteTimeoutMs = 3000;
+    private long ackTimeoutMs = 3000;
+
     public Tx2PCCoordinator(Transaction transaction, ProtocolDbTxEntry txEntry, int numAgents,
             ArrayList<AgentClient> agentCList, Connection dbCon, TxProcessor txProcessor, String resultDir) {
         this.numAgents = numAgents;
@@ -55,18 +59,11 @@ public class Tx2PCCoordinator implements Runnable {
         return (opHashCode % numAgents);
     }
 
-    public void processTxIn2PC(Transaction tx) {
-        resultLogger = new ResultFileLogger(this.resultLogFileName);
-        coordinatorTxLogger = new CoordinatorTxLogger(transaction.transactionId, logDbConnection);
-        resultLogger.writeln("-------------------------------------------------");
-        resultLogger.writeln(
-                "Started Processing New Transaction in 2PC Protocol" + " | Tx ID: " + String.valueOf(tx.transactionId));
-        resultLogger.writeln(tx.toString());
+    private void statementPhase(){
+        Message startMsg = new Message(Message.MessageType.START, transaction.transactionId);
 
-        Message startMsg = new Message(Message.MessageType.START, tx.transactionId);
-
-        for (int i = 0; i < tx.operations.size(); i++) {
-            Operation op = tx.operations.get(i);
+        for (int i = 0; i < transaction.operations.size(); i++) {
+            Operation op = transaction.operations.get(i);
             int agentId = getCorrespondAgentId(op);
             AgentClient aclient = agentClientList.get(agentId);
             if (!protocolDbTxEntry.CohortsStateMap.containsKey(agentId)) {
@@ -75,7 +72,7 @@ public class Tx2PCCoordinator implements Runnable {
                 aclient.addMsgToSendQueue(startMsg);
             }
 
-            Message stnMsg = new Message(Message.MessageType.STATEMENT, tx.transactionId);
+            Message stnMsg = new Message(Message.MessageType.STATEMENT, transaction.transactionId);
             stnMsg.setSql(op.sqlStr);
             aclient.addMsgToSendQueue(stnMsg);
             resultLogger.writeln("SQL Statement Sent to Agent " + String.valueOf(agentId) + ": " + op.sqlStr);
@@ -90,9 +87,12 @@ public class Tx2PCCoordinator implements Runnable {
             participantsList = participantsList + String.valueOf(agId) + " | ";
         }
         resultLogger.writeln(participantsList);
+    }
+
+    private Decision sendPrepareAndWaitPhase(){
         protocolDbTxEntry.coordinatorState = CoordinatorState.PREPARING;
 
-        Message prepareMsg = new Message(Message.MessageType.PREPARE, tx.transactionId);
+        Message prepareMsg = new Message(Message.MessageType.PREPARE, transaction.transactionId);
         for (Integer agId : protocolDbTxEntry.CohortsStateMap.keySet()) {
             AgentClient aclient = agentClientList.get(agId);
             aclient.addMsgToSendQueue(prepareMsg);
@@ -102,7 +102,13 @@ public class Tx2PCCoordinator implements Runnable {
         while (protocolDbTxEntry.numOfVoted < protocolDbTxEntry.numOfCohorts) {
             resultLogger.writeln("Wait for Voting, " + String.valueOf(protocolDbTxEntry.numOfVoted) + " out of "
                     + String.valueOf(protocolDbTxEntry.numOfCohorts) + " Voted");
-            Message recvMsg = takeRecvMessage();
+            Message recvMsg = takeRecvMessageWTimeout(voteTimeoutMs);
+
+            if(recvMsg == null){
+                protocolDbTxEntry.decision = Decision.ABORT;
+                return Decision.ABORT;
+            }
+
             int cohortId = recvMsg.agentId;
             if (recvMsg.type != MessageType.VOTEPREPARED && recvMsg.type != MessageType.VOTEABORT) {
                 ;
@@ -117,6 +123,7 @@ public class Tx2PCCoordinator implements Runnable {
                     // decision is changed to abort
                     resultLogger.writeln("Agent " + String.valueOf(cohortId) + " Voted for ABORT");
                     protocolDbTxEntry.decision = Decision.ABORT;
+                    return Decision.ABORT;
                     // protocolDbTxEntry.CohortsStateMap.replace(cohortId,CohortsState.PREPARED);
                 } else if (recvMsg.type == MessageType.VOTEPREPARED) {
                     resultLogger.writeln("Agent " + String.valueOf(cohortId) + " Voted for PREPARED(COMMIT)");
@@ -124,31 +131,35 @@ public class Tx2PCCoordinator implements Runnable {
                 }
             }
         }
+        return Decision.COMMIT;
+    }
 
-        if (protocolDbTxEntry.decision == Decision.COMMIT) {
-            resultLogger.writeln("Voting Complete, The decision is: COMMIT");
+    private void processWithCommit(){
+        resultLogger.writeln("Voting Complete, The decision is: COMMIT");
             protocolDbTxEntry.coordinatorState = CoordinatorState.COMMITED;
             // Write Log
             coordinatorTxLogger.writeTxLog(CoordinatorTxState.COMMIT);
 
-            Message commitMsg = new Message(Message.MessageType.ACTCOMMIT, tx.transactionId);
+            Message commitMsg = new Message(Message.MessageType.ACTCOMMIT, transaction.transactionId);
             for (Integer agId : protocolDbTxEntry.CohortsStateMap.keySet()) {
                 AgentClient aclient = agentClientList.get(agId);
                 aclient.addMsgToSendQueue(commitMsg);
                 resultLogger.writeln("COMMIT Sent to Agent " + String.valueOf(agId));
             }
-        } else {
-            // Abort
-            resultLogger.writeln("Voting Complete, The decision is: ABORT");
-            protocolDbTxEntry.coordinatorState = CoordinatorState.ABORTED;
-            Message abortMsg = new Message(Message.MessageType.ACTABORT, tx.transactionId);
-            for (Integer agId : protocolDbTxEntry.CohortsStateMap.keySet()) {
-                AgentClient aclient = agentClientList.get(agId);
-                aclient.addMsgToSendQueue(abortMsg);
-                resultLogger.writeln("ABORT Sent to Agent " + String.valueOf(agId));
-            }
-        }
+    }
 
+    private void processWithAbort(){
+        resultLogger.writeln("Voting Complete, The decision is: ABORT");
+        protocolDbTxEntry.coordinatorState = CoordinatorState.ABORTED;
+        Message abortMsg = new Message(Message.MessageType.ACTABORT, transaction.transactionId);
+        for (Integer agId : protocolDbTxEntry.CohortsStateMap.keySet()) {
+            AgentClient aclient = agentClientList.get(agId);
+            aclient.addMsgToSendQueue(abortMsg);
+            resultLogger.writeln("ABORT Sent to Agent " + String.valueOf(agId));
+        }
+    }
+
+    private void waitAckPhase(){
         while (protocolDbTxEntry.numOfAcked < protocolDbTxEntry.numOfCohorts) {
             resultLogger.writeln("Wait for ACKs, " + String.valueOf(protocolDbTxEntry.numOfAcked) + " out of "
                     + String.valueOf(protocolDbTxEntry.numOfCohorts) + " Acked");
@@ -167,6 +178,29 @@ public class Tx2PCCoordinator implements Runnable {
                 }
             }
         }
+    }
+
+    public void processTxIn2PC() {
+        resultLogger = new ResultFileLogger(this.resultLogFileName);
+        coordinatorTxLogger = new CoordinatorTxLogger(transaction.transactionId, logDbConnection);
+        resultLogger.writeln("-------------------------------------------------");
+        resultLogger.writeln(
+                "Started Processing New Transaction in 2PC Protocol" + " | Tx ID: " + String.valueOf(transaction.transactionId));
+        resultLogger.writeln(transaction.toString());
+
+        statementPhase();
+
+        Decision decision = sendPrepareAndWaitPhase();
+        // the protocolDbTxEntry.decision need to be set properly in preparePhase()
+        
+        if (decision == Decision.COMMIT){
+            processWithCommit();
+        } else{
+            // Abort
+            processWithAbort();
+        }
+
+        waitAckPhase();
 
         // Write complete log
         coordinatorTxLogger.writeTxLog(CoordinatorTxState.COMPLETED);
@@ -193,8 +227,19 @@ public class Tx2PCCoordinator implements Runnable {
         return msg;
     }
 
+    public Message takeRecvMessageWTimeout(long timeoutMs) {
+        Message msg = null;
+        try {
+            msg = this.recvMessageQueue.poll(timeoutMs, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+
+        return msg;
+    }
+
     public void run() {
-        processTxIn2PC(this.transaction);
+        processTxIn2PC();
         resultLogger.close();
 
         try {
