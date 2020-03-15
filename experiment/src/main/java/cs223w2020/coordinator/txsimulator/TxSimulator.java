@@ -28,6 +28,13 @@ public class TxSimulator implements Runnable
         long time;
         int opCount = 0;
         while(true){
+            //debug purpose
+            if(txCounter > 10){
+                while(true){
+                    ;
+                }
+            }
+
             op = opQueue.poll();
             if(!(op == null)){
                 //System.out.println(op);
@@ -49,6 +56,7 @@ public class TxSimulator implements Runnable
 
     public void sendTransaction(Transaction tx){
         txCounter = txCounter + 1;
+
         tx.setConstructTimeToNow();
         tx.transactionId = txCounter;
         txQueue.put(tx);

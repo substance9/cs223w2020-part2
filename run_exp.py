@@ -74,9 +74,9 @@ def init_dbs(num_agents):
         #TODO: init log db for agents
         print("Initiate DB for agent "+ str(agent_id))
         agent_db_port = AGENT_DB_PORTS_STARTS_AT + agent_id 
-        call_cmd(["./init_postgres_high_concurrency.sh",str(agent_db_port)])
+        call_cmd(["./init_postgres_low_concurrency.sh",str(agent_db_port)])
 
-def runexp(num_agents, simulated_error, error_transaction_id):
+def runexp(mpl, num_agents, simulated_error, error_transaction_id):
     #create_db_vols(num_agents)
     #start_db_containers(num_agents)
     #init_dbs(num_agents)
@@ -91,6 +91,7 @@ def runexp(num_agents, simulated_error, error_transaction_id):
 
     output_dir = "/home/guoxi/Workspace/cs223w2020-part2/results/" + "errID_" + str(simulated_error) + "|transID_" + str(error_transaction_id) + "|expID_" + experiment_id
     pathlib.Path(output_dir).mkdir(parents=True, exist_ok=True)
+    pathlib.Path(output_dir + "/transactions").mkdir(parents=True, exist_ok=True)
 
     for agent_id in range(num_agents):
         agent_output_file_path = output_dir + "/agent_" + str(agent_id) + "_output.txt"
@@ -98,6 +99,8 @@ def runexp(num_agents, simulated_error, error_transaction_id):
         agent_db_port = AGENT_DB_PORTS_STARTS_AT + agent_id
         agent_app_port = AGENT_APP_PORTS_STARTS_AT + agent_id
         agent_proc = call_cmd_no_blocking(["java", "-jar" ,"-Xmx32g", "build/libs/experiment-agent-all-0.1.jar", \
+                            "-a", str(agent_id),\
+                            "-m", str(mpl),\
                             "-d", str(agent_db_port),\
                             "-p", str(agent_app_port),\
                             "-i", experiment_id,\
@@ -110,7 +113,8 @@ def runexp(num_agents, simulated_error, error_transaction_id):
     coordinator_output_file_path = output_dir + "/coordinator"  + "_output.txt"
     coordinator_output_file = open(coordinator_output_file_path, "w")
     coordinator_proc = call_cmd_no_blocking(["java", "-jar" ,"-Xmx32g", "build/libs/experiment-coordinator-all-0.1.jar",\
-                            "-w", "high", \
+                            "-m", str(mpl),\
+                            "-w", "low", \
                             "-p", "simplebatch", \
                             "-d", str(COORDINATOR_DB_PORT), \
                             "-n", str(num_agents),\
@@ -127,4 +131,4 @@ def runexp(num_agents, simulated_error, error_transaction_id):
 
 print("Please make sure the clean_exp.py is executed to remove the previous DB containers and volumes")
 
-runexp(num_agents=3,simulated_error=0,error_transaction_id=10)
+runexp(mpl=2, num_agents=3,simulated_error=0,error_transaction_id=10)

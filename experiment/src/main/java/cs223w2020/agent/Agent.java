@@ -16,8 +16,12 @@ public class Agent {
 
         Properties prop = readConfig(args);
 
-        AgentServer server=new AgentServer();
-        server.start(Integer.parseInt(prop.getProperty("agent_app_port")));
+        AgentServer server=new AgentServer(Integer.parseInt(prop.getProperty("agent_id")),
+                                        Integer.parseInt(prop.getProperty("mpl")), 
+                                        Integer.parseInt(prop.getProperty("agent_app_port")), 
+                                        Integer.parseInt(prop.getProperty("agent_db_port")), 
+                                        prop.getProperty("result.output_dir"));
+        server.start();
     }
 
     private static Properties readConfig( String[] args ){
@@ -34,7 +38,9 @@ public class Agent {
         }
 
         ArgumentParser parser = ArgumentParsers.newFor("Agent").build().defaultHelp(true)
-				.description("CS223 Project Part 2 Experiment - Agent");
+                .description("CS223 Project Part 2 Experiment - Agent");
+        parser.addArgument("-a", "--agent_id").required(true).help("Agent ID");
+        parser.addArgument("-m", "--mpl").required(true).setDefault("2").help("Multiple Processing Level");
         parser.addArgument("-d", "--dbport").required(true).help("DB Port for agent");
         parser.addArgument("-p", "--port").required(true).help("App port");
         parser.addArgument("-i", "--id").required(true).help("Experiment ID");
@@ -51,6 +57,8 @@ public class Agent {
         
         if (args.length >= 2){
             //read config from command line args
+            prop.setProperty("agent_id", ns.get("agent_id"));
+            prop.setProperty("mpl", ns.get("mpl"));
             prop.setProperty("agent_db_port", ns.get("dbport"));
             prop.setProperty("agent_app_port", ns.get("port"));
             prop.setProperty("experiment_id", ns.get("id"));
@@ -67,6 +75,8 @@ public class Agent {
 
         System.out.println( "Experiment Parameters:" );
             // get the property value and print it out
+            System.out.println("--mpl:\t\t\t"+prop.getProperty("mpl"));
+            System.out.println("--agent_id:\t\t\t"+prop.getProperty("agent_id"));
             System.out.println("--agent_db_port:\t"+prop.getProperty("agent_db_port"));
             System.out.println("--agent_app_port:\t\t"+prop.getProperty("agent_app_port"));
             System.out.println("--experiment_id:\t"+prop.getProperty("experiment_id"));

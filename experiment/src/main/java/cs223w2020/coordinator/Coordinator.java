@@ -12,7 +12,7 @@ import java.util.Properties;
 import cs223w2020.coordinator.OperationQueue;
 import cs223w2020.coordinator.TransactionQueue;
 import cs223w2020.coordinator.replayer.*;
-import cs223w2020.coordinator.txsender.TxSender;
+import cs223w2020.coordinator.txprocessor.TxProcessor;
 import cs223w2020.coordinator.txsimulator.*;
 
 
@@ -30,13 +30,15 @@ public class Coordinator {
         TransactionQueue tQueue = new TransactionQueue();
 
         // //Start the replayer to read and send data
-        TxSender txSender = new TxSender(tQueue,
+        TxProcessor txProcessor = new TxProcessor(tQueue,
+                                            Integer.parseInt(prop.getProperty("mpl")), 
+                                            Integer.parseInt(prop.getProperty("coordinator_db_port")), 
                                             Integer.parseInt(prop.getProperty("num_agents")), 
                                             Integer.parseInt(prop.getProperty("agent_ports_starts")),
                                             prop.getProperty("result.output_dir"));
 
-        txSender.connectToAgents();
-        Thread txSenderThread = new Thread(txSender); 
+        txProcessor.connectToAgents();
+        Thread txSenderThread = new Thread(txProcessor); 
 
         txSenderThread.start();
 
@@ -107,7 +109,8 @@ public class Coordinator {
         }
 
         ArgumentParser parser = ArgumentParsers.newFor("Coordinator").build().defaultHelp(true)
-				.description("CS223 Project Part 2 Experiment - Coordinator");
+                .description("CS223 Project Part 2 Experiment - Coordinator");
+        parser.addArgument("-m", "--mpl").required(true).setDefault("2").help("Multiple Processing Level");
 		parser.addArgument("-w", "--workload").choices("low","high")
 				.setDefault("high").help("Dataset Workload");
         parser.addArgument("-p", "--policy").choices("single","batch","simplebatch")
@@ -129,6 +132,7 @@ public class Coordinator {
         
         if (args.length >= 2){
             //read config from command line args
+            prop.setProperty("mpl", ns.get("mpl"));
             prop.setProperty("replayer.concurrency", ns.get("workload"));
             prop.setProperty("simulator.policy", ns.get("policy"));
             prop.setProperty("agent_ports_starts", ns.get("agent_ports_starts"));
@@ -153,6 +157,7 @@ public class Coordinator {
             System.out.println("--replayer.experiment_duration:\t"+prop.getProperty("replayer.experiment_duration"));
             System.out.println("--simulator.policy:\t\t"+prop.getProperty("simulator.policy"));
             System.out.println("--agent_ports_starts:\t\t"+prop.getProperty("agent_ports_starts"));
+            System.out.println("--mpl:\t\t\t"+prop.getProperty("mpl"));
             System.out.println("--num_agents:\t\t"+prop.getProperty("num_agents"));
             System.out.println("--coordinator_db_port:\t\t"+prop.getProperty("coordinator_db_port"));
             System.out.println("--experiment_id:\t\t"+prop.getProperty("experiment_id"));

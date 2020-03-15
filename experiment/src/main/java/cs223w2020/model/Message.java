@@ -2,9 +2,10 @@ package cs223w2020.model;
 
 public class Message {
     public enum MessageType {
-        STATEMENT, PREPARE, VOTEPREPARED, VOTEABORT,
-        ACTCOMMIT, ACTABORT, ACK 
+        START, STATEMENT, PREPARE, VOTEPREPARED, VOTEABORT,
+        ACTCOMMIT, ACTABORT, ACK, QUERY 
     }
+        //c-a:START (first message to init everything)
         //c->a:STATEMENT
         //c->a:PREPARE
         //a->c:VOTE:PREPARED/ABORT
@@ -16,6 +17,7 @@ public class Message {
     
     public int transactionId;
     public String sql;
+    public int agentId;
     
     public Message(MessageType t, int transactionId){
         this.type = t;
@@ -23,6 +25,7 @@ public class Message {
     }
 
     public Message(){
+        
     }
     
     public void setSql(String sqlStr){

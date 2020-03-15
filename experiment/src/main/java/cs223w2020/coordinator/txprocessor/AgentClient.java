@@ -1,36 +1,45 @@
-package cs223w2020.coordinator.txsender;
+package cs223w2020.coordinator.txprocessor;
 
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.Socket;
+import java.net.SocketTimeoutException;
 import java.net.UnknownHostException;
+import java.util.HashMap;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import cs223w2020.model.Message;
+import cs223w2020.model.Message.MessageType;
 
 class AgentClient implements Runnable {
     private String host = "127.0.0.1";
+    private int agentId;
     private int port;
     private Socket clientSocket;
     private PrintWriter out;
     private BufferedReader in;
 
-    private BlockingQueue<Message> msgQueue;
+    public HashMap<Integer, Tx2PCCoordinator> tx2PCProcessorMap;
 
-    public AgentClient(int port) {
+    private BlockingQueue<Message> msgSendQueue;
+
+    public AgentClient(int id, int port, HashMap<Integer, Tx2PCCoordinator> processorMap) {
+        this.agentId = id;
         this.port = port;
-        msgQueue = new LinkedBlockingQueue<Message>();
+        msgSendQueue = new LinkedBlockingQueue<Message>();
+        this.tx2PCProcessorMap = processorMap;
     }
 
     public void addMsgToSendQueue(Message msg) {
         try {
-            msgQueue.put(msg);
+            msgSendQueue.put(msg);
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
@@ -41,6 +50,8 @@ class AgentClient implements Runnable {
         String ip = host;
 
         clientSocket = new Socket(ip, port);
+
+        clientSocket.setSoTimeout(1);
 
         out = new PrintWriter(clientSocket.getOutputStream(), true);
 
@@ -60,22 +71,26 @@ class AgentClient implements Runnable {
         // }
     }
 
-    public Message recvMessageBlocking(){
+    public Message recvMessageWTimeout() {
         String resp = null;
         Message respMsg = null;
 
         try {
             resp = in.readLine();
+        } catch (SocketTimeoutException e) {
+            return null;
         } catch (IOException e) {
             e.printStackTrace();
         }
 
-        respMsg = deserializeStr(resp);
+        if (resp != null) {
+            respMsg = deserializeStr(resp);
+        }
 
         return respMsg;
     }
 
-    public String serializeObj(Object obj){
+    public String serializeObj(Object obj) {
         ObjectMapper mapper = new ObjectMapper();
         String msg = null;
         try {
@@ -86,7 +101,7 @@ class AgentClient implements Runnable {
         return msg;
     }
 
-    public Message deserializeStr(String str){
+    public Message deserializeStr(String str) {
         ObjectMapper mapper = new ObjectMapper();
         Message msg = null;
         try {
@@ -97,24 +112,36 @@ class AgentClient implements Runnable {
         return msg;
     }
 
+    public void routeRecvMsg(Message recvMsg) {
+        recvMsg.agentId = this.agentId;
+        MessageType msgType = recvMsg.getType();
+        if (msgType == MessageType.QUERY) {
+            ;
+        } else {
+            Tx2PCCoordinator txProcessor = tx2PCProcessorMap.get(recvMsg.transactionId);
+            txProcessor.addRecvMessage(recvMsg);
+        }
+    }
+
     public void run() {
         while (true) {
-            // 1. get the transaction from queue
-            Message msg = null;
+            Message sendMsg = null;
             try {
-                msg = msgQueue.take();
+                sendMsg = msgSendQueue.poll(1, TimeUnit.MILLISECONDS);
             } catch (InterruptedException e) {
-                e.printStackTrace();
+                sendMsg = null;
             }
-            if (msg!=null){
-                sendMessage(msg);
+            if (sendMsg!=null){
+                sendMessage(sendMsg);
             }
-            else{
-                //end mark transaction
-                
-                
-                return;
-            }
+            
+            Message recvMsg = null;
+            recvMsg = recvMessageWTimeout();
+            
+            if(recvMsg != null){
+                routeRecvMsg(recvMsg);
+            } 
         }
+
     } 
 } 
