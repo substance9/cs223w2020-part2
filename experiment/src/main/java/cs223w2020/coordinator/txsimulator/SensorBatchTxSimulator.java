@@ -11,8 +11,8 @@ import cs223w2020.coordinator.TransactionQueue;
 
 public class SensorBatchTxSimulator extends TxSimulator 
 {
-    public SensorBatchTxSimulator(OperationQueue opQueue, TransactionQueue txQueue){
-        super(opQueue, txQueue);
+    public SensorBatchTxSimulator(OperationQueue opQueue, TransactionQueue txQueue, int maxTxCount){
+        super(opQueue, txQueue, maxTxCount);
         opListMap = new HashMap<String, LinkedList<Operation>>();
     }
 

@@ -11,14 +11,16 @@ import cs223w2020.model.Transaction;
 public class TxSimulator implements Runnable 
 { 
     private int txCounter;
+    public int maxTxCount;
 
     private OperationQueue opQueue;
     private TransactionQueue txQueue;
 
-    public TxSimulator(OperationQueue opQueue, TransactionQueue txQueue){
+    public TxSimulator(OperationQueue opQueue, TransactionQueue txQueue, int maxTxCount){
         this.opQueue = opQueue;
         this.txQueue = txQueue;
         this.txCounter = 0;
+        this.maxTxCount = maxTxCount;
     }
 
     public void run() 
@@ -29,7 +31,7 @@ public class TxSimulator implements Runnable
         int opCount = 0;
         while(true){
             //debug purpose
-            if(txCounter > 10){
+            if(txCounter > maxTxCount){
                 while(true){
                     ;
                 }

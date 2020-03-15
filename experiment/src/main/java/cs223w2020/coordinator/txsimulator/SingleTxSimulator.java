@@ -11,8 +11,8 @@ public class SingleTxSimulator extends TxSimulator
 {
     private OperationQueue opQueue;
 
-    public SingleTxSimulator(OperationQueue opQueue, TransactionQueue txQueue){
-        super(opQueue, txQueue);
+    public SingleTxSimulator(OperationQueue opQueue, TransactionQueue txQueue, int maxTxCount){
+        super(opQueue, txQueue, maxTxCount);
     }
 
     @Override

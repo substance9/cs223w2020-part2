@@ -24,8 +24,8 @@ public class BatchTxSimulator extends TxSimulator
     private LinkedList<SensorTime> sensorTimeList;
     private long timeWindow;
 
-    public BatchTxSimulator(OperationQueue opQueue, TransactionQueue txQueue){
-        super(opQueue, txQueue);
+    public BatchTxSimulator(OperationQueue opQueue, TransactionQueue txQueue, int maxTxCount){
+        super(opQueue, txQueue, maxTxCount);
         opListMap = new HashMap<String, LinkedList<Operation>>();
         sensorTimeList = new LinkedList<SensorTime>();
         timeWindow = 60*1000; //ms

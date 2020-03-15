@@ -50,10 +50,10 @@ def start_db_containers(num_agents):
                         "--rm",\
                         "--volume="+coordinator_vol_name+":/var/lib/postgresql/data",\
                         "-p",str(COORDINATOR_DB_PORT)+":5432",\
-                        "--shm-size=8G",\
+                        "--shm-size=4G",\
                         "-e","POSTGRES_PASSWORD=password",\
                         "-d","postgres:12.1",\
-                        "-N","1000"])
+                        "-N","10"])
 
     for agent_id in range(num_agents):
         agent_vol_name = DB_VOL_NAME_BASE+"agent_val_"+str(agent_id)
@@ -63,10 +63,11 @@ def start_db_containers(num_agents):
                         "--rm",\
                         "--volume="+agent_vol_name+":/var/lib/postgresql/data",\
                         "-p",str(agent_db_port)+":5432",\
-                        "--shm-size=8G",\
+                        "--shm-size=4G",\
                         "-e","POSTGRES_PASSWORD=password",\
                         "-d","postgres:12.1",\
-                        "-N","1000"])
+                        "-N","10",\
+                        "-c","max_prepared_transactions=32"])
 
 
 def init_dbs(num_agents):
@@ -78,10 +79,12 @@ def init_dbs(num_agents):
         agent_db_port = AGENT_DB_PORTS_STARTS_AT + agent_id 
         call_cmd(["./init_postgres_low_concurrency.sh",str(agent_db_port)])
 
-def runexp(mpl, num_agents, simulated_error, error_transaction_id):
-    #create_db_vols(num_agents)
-    #start_db_containers(num_agents)
-    #init_dbs(num_agents)
+def runexp(mpl, num_agents, simulated_error, error_transaction_id, skip_db_init, num_of_tx_in_total):
+    if(skip_db_init is False):
+        create_db_vols(num_agents)
+        start_db_containers(num_agents)
+        time.sleep(3)
+        init_dbs(num_agents)
 
     os.chdir(PROJECT_DIR_PATH + "/experiment")
     subprocess.call(["gradle","clean"])
@@ -118,6 +121,7 @@ def runexp(mpl, num_agents, simulated_error, error_transaction_id):
                             "-m", str(mpl),\
                             "-w", "low", \
                             "-p", "simplebatch", \
+                            "-c", str(num_of_tx_in_total),\
                             "-d", str(COORDINATOR_DB_PORT), \
                             "-n", str(num_agents),\
                             "-s", str(AGENT_APP_PORTS_STARTS_AT),\
@@ -133,4 +137,4 @@ def runexp(mpl, num_agents, simulated_error, error_transaction_id):
 
 print("Please make sure the clean_exp.py is executed to remove the previous DB containers and volumes")
 
-runexp(mpl=2, num_agents=3,simulated_error=0,error_transaction_id=10)
+runexp(mpl=2, num_agents=3,simulated_error=0,error_transaction_id=10,skip_db_init=False,num_of_tx_in_total=10)

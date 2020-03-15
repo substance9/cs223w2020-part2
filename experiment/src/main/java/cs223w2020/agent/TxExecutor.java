@@ -6,84 +6,101 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 
-import cs223w2020.coordinator.TransactionQueue;
-import cs223w2020.model.Operation;
-import cs223w2020.model.Transaction;
 
-public class TxExecutor implements Runnable 
+public class TxExecutor
 { 
-    private Transaction tx;
-    private HikariDataSource  connectionPool;
-    private int isolationLevel;
-    private TransactionQueue resQueue;
+    private int transactionId;
+    private String fullTransactionId;
+    private Connection dbCon;
+    private Connection txControlCon;
 
-    public TxExecutor(Transaction tx, HikariDataSource connectionPool, int isolationLevel, TransactionQueue resQueue){
-        this.tx = tx;
-        this.resQueue = resQueue;
-        this.connectionPool = connectionPool;
-        this.isolationLevel = isolationLevel;
+    public TxExecutor(int transactionId, Connection dbCon, Connection controlCon){
+        this.transactionId = transactionId;
+        this.dbCon = dbCon;
+        this.txControlCon = controlCon;
+
+        try {
+            this.dbCon.setAutoCommit(false);
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+
+        try {
+            this.txControlCon.setAutoCommit(true);
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+
+        fullTransactionId = "tx" + String.valueOf(transactionId);
     }
 
-    public void run() 
-    {
-        Connection con = null;
-        Operation op = null;
+    public int executeStatement(String sqlStr){
         PreparedStatement pst = null;
-        ResultSet rs = null;
-        String sqlStatement = null;
         int numRowsAffected = 0;
-        try{
-            //System.out.println("try executing");
-            con = connectionPool.getConnection();
-            con.setTransactionIsolation(isolationLevel);
-            con.setAutoCommit(false);
+        ResultSet rs = null;
 
-            tx.setBeginTimeToNow();
-
-            for(int i = 0; i < tx.operations.size(); i++){
-                op = tx.operations.get(i);
-                
-                if(op.operationStr.equals("SELECT")){
-                    pst = con.prepareStatement(op.sqlStr);
-                    rs = pst.executeQuery();
-                }
-                else if(op.operationStr.equals("INSERT")){
-                    pst = con.prepareStatement(op.sqlStr);
-                    numRowsAffected = pst.executeUpdate();
-                    ;
-                }
-                else{
-                    System.out.println("ERROR: Operation Type " + op.operationStr + " not supported");
-                }
-            }
-
-            con.commit();
-            tx.setEndTimeToNow();
-            if(op.operationStr.equals("SELECT")){
-                while (rs.next()) {
-                    ;
-                }
-            }
-            
-        } catch (SQLException ex){
-            System.out.println(tx.operations.get(0).sqlStr);
-            ex.printStackTrace();
-        }finally {
-            try {
-                if (rs != null) {
-                    rs.close();
-                }
-                if (pst != null) {
-                    pst.close();
-                }
-                if (con != null) {
-                    con.close();
-                }
-            } catch (SQLException ex) {
-                ex.printStackTrace();
-            }
+        try {
+            pst = dbCon.prepareStatement(sqlStr);
+            numRowsAffected = pst.executeUpdate();
+        } catch (SQLException e) {
+            e.printStackTrace();
         }
-        resQueue.put(tx);
+        
+        return numRowsAffected;
+    }
+
+    public boolean commitTransaction(){
+        boolean result = true;
+        String commitTxStatement = "COMMIT PREPARED '"+ fullTransactionId +"';";
+        PreparedStatement pst = null;
+        try {
+            pst = txControlCon.prepareStatement(commitTxStatement);
+            pst.execute();
+        } catch (SQLException e) {
+            e.printStackTrace();
+            result = false;
+        }
+
+        return result;
+    }
+
+    public boolean rollbackTransaction(){
+        boolean result = true;
+        String rollbackTxStatement = "ROLLBACK PREPARED '"+ fullTransactionId +"';";
+        PreparedStatement pst = null;
+        try {
+            pst = txControlCon.prepareStatement(rollbackTxStatement);
+            pst.execute();
+        } catch (SQLException e) {
+            e.printStackTrace();
+            result = false;
+        }
+
+        return result;
+    }
+
+    public boolean prepareTransaction(){
+        boolean result = true;
+        String prepareTxStatement = "PREPARE TRANSACTION '"+ fullTransactionId +"';";
+        PreparedStatement pst = null;
+        try {
+            pst = dbCon.prepareStatement(prepareTxStatement);
+            pst.execute();
+        } catch (SQLException e) {
+            e.printStackTrace();
+            result = false;
+        }
+
+        return result;
+    }
+
+    public void closeTransaction(){
+        try {
+            dbCon.close();
+            txControlCon.close();
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
     }
 
     

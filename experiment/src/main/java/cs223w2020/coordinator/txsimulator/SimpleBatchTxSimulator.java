@@ -13,8 +13,8 @@ public class SimpleBatchTxSimulator extends TxSimulator
 {
     public LinkedList<Operation> opList;
 
-    public SimpleBatchTxSimulator(OperationQueue opQueue, TransactionQueue txQueue){
-        super(opQueue, txQueue);
+    public SimpleBatchTxSimulator(OperationQueue opQueue, TransactionQueue txQueue, int maxTxCount){
+        super(opQueue, txQueue, maxTxCount);
         opList = new LinkedList<Operation>();
     }
 

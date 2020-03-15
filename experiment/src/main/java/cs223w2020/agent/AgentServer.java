@@ -10,6 +10,7 @@ import java.net.Socket;
 import java.net.SocketException;
 import java.net.SocketTimeoutException;
 import java.sql.Connection;
+import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.Properties;
 import java.util.concurrent.BlockingQueue;
@@ -20,6 +21,7 @@ import java.util.concurrent.TimeUnit;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 
 import cs223w2020.model.Message;
@@ -40,7 +42,8 @@ public class AgentServer {
     private String resultDir;
 
     public ExecutorService tx2PCCohortThreadPool;
-    public HikariDataSource dBConnectionPool;
+    public HikariDataSource logDBConnectionPool;
+    public HikariDataSource dataDBConnectionPool;
 
     public HashMap<Integer, Tx2PCCohort> txCohortMap;
 
@@ -57,17 +60,16 @@ public class AgentServer {
         Properties prop = getHikariDbProperties("postgres");
 
         String jdbcUrlBase = prop.getProperty("jdbcUrl");
-        String jdbcUrl = jdbcUrlBase + ":" + String.valueOf(dbPort) + "/cs223w2020_cohort_log";
+        String dataJdbcUrl = jdbcUrlBase + ":" + String.valueOf(dbPort) + "/cs223w2020_low_concurrency";
 
-        System.out.println("Preparing to connect to DB for log storage: " + jdbcUrl);
+        System.out.println("Preparing to connect to DB for data storage: " + dataJdbcUrl);
 
         // TODO: DB COnnection
-        // HikariConfig cfg = new HikariConfig(prop);
-        // cfg.setJdbcUrl(jdbcUrl);
-        // cfg.setMaximumPoolSize(mpl);
-        // //cfg.setTransactionIsolation(isolationLevel);
-        // cfg.setAutoCommit(false);
-        // dBConnectionPool = new HikariDataSource(cfg);
+        HikariConfig dataDbCfg = new HikariConfig(prop);
+        dataDbCfg.setJdbcUrl(dataJdbcUrl);
+        dataDbCfg.setMaximumPoolSize(mpl*2+1);
+        dataDbCfg.setAutoCommit(false);
+        dataDBConnectionPool = new HikariDataSource(dataDbCfg);
 
         tx2PCCohortThreadPool = Executors.newFixedThreadPool(mpl);
     }
@@ -188,20 +190,20 @@ public class AgentServer {
             } catch (InterruptedException e) {
                 sendMsg = null;
             }
-            if (sendMsg!=null){
+            if (sendMsg != null) {
                 sendMessage(sendMsg);
             }
-            
+
             Message recvMsg = null;
             recvMsg = recvMessageWTimeout();
-            
-            if(recvMsg != null){
+
+            if (recvMsg != null) {
                 processMsg(recvMsg);
-            } 
+            }
         }
-        
+
     }
- 
+
     public void stop() {
         try {
             in.close();
@@ -221,11 +223,20 @@ public class AgentServer {
         }
     }
 
-    private void processMsg(Message msg){
-        //System.out.println(msg);
+    private void processMsg(Message msg) {
+        // System.out.println(msg);
 
-        if (msg.type == MessageType.START){
+        if (msg.type == MessageType.START) {
             Connection logDbCon = null;
+            Connection dataDbCon = null;
+            Connection dataDbTxControlCon = null;
+            try {
+                dataDbCon = dataDBConnectionPool.getConnection();
+                dataDbTxControlCon = dataDBConnectionPool.getConnection();
+            } catch (SQLException e) {
+                e.printStackTrace();
+                return;
+            }
             int newTxId = msg.transactionId;
                 // TODO: DB COnnection
                 // try{
@@ -236,7 +247,7 @@ public class AgentServer {
                 //     System.out.println(tx.operations.get(0).sqlStr);
                 //     ex.printStackTrace();
                 // }
-            Tx2PCCohort txCohort = new Tx2PCCohort(agentId, newTxId, logDbCon, this, resultDir);
+            Tx2PCCohort txCohort = new Tx2PCCohort(agentId, newTxId, logDbCon, dataDbCon, dataDbTxControlCon, this, resultDir);
             txCohortMap.put(newTxId, txCohort);
             tx2PCCohortThreadPool.execute(txCohort);
             System.out.println("Create new 2PC Cohort Thread for transaction" + String.valueOf(newTxId));
