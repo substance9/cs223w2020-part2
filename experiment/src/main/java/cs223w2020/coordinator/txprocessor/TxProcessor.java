@@ -44,6 +44,8 @@ public class TxProcessor implements Runnable {
     public ExecutorService tx2PCCoordinatorThreadPool;
     public HikariDataSource dBConnectionPool;
 
+    public TxStateQuerier txStateQuerier;
+
     public TxProcessor(TransactionQueue txQueue, int mpl, int dbPort, int numAgents, int agentsPortsStartAt,
             String resOutputDir) {
         this.txQueue = txQueue;
@@ -63,6 +65,13 @@ public class TxProcessor implements Runnable {
         for (int i = 0; i < numAgents; i++) {
             AgentClient aclient = new AgentClient(i, agentsPortsStartAt + i, this);
             agentClientList.add(aclient);
+        }
+
+        txStateQuerier = new TxStateQuerier(this, agentClientList); 
+
+        for (int i = 0; i < numAgents; i++) {
+            AgentClient aclient = agentClientList.get(i);
+            aclient.addTxStateQuerier(txStateQuerier);
         }
 
         Properties prop = getHikariDbProperties("postgres");
@@ -282,6 +291,9 @@ public class TxProcessor implements Runnable {
     }
 
     public void run() {
+        Thread txStateQuerierThread = new Thread(txStateQuerier);
+        txStateQuerierThread.start();
+
         for (int i = 0; i < numAgents; i++) {
             AgentClient aclient = agentClientList.get(i);
             Thread acThread = new Thread(aclient);
