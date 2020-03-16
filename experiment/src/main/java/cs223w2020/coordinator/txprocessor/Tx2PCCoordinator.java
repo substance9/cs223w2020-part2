@@ -259,7 +259,7 @@ public class Tx2PCCoordinator implements Runnable {
             resultLogger.writeln("Resend COMMIT to Agent (all) " + String.valueOf(agId));
         }
 
-        waitAckPhase();
+        waitAckPhase(commitMsg);
         // Write complete log
         coordinatorTxLogger.writeTxLog(CoordinatorTxState.COMPLETED,0); //num of cohorts is a hack for recovery
         resultLogger.writeln("Transaction (recovered) Completed ");
