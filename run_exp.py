@@ -144,4 +144,4 @@ def runexp(mpl, num_agents, simulated_error, error_transaction_id, skip_db_init,
 
 print("Please make sure the clean_exp.py is executed to remove the previous DB containers and volumes")
 
-runexp(mpl=2,num_agents=3,simulated_error=0,error_transaction_id=10,skip_db_init=False,num_of_tx_in_total=10)
+runexp(mpl=2,num_agents=3,simulated_error=0,error_transaction_id=10,skip_db_init=False,num_of_tx_in_total=1000)

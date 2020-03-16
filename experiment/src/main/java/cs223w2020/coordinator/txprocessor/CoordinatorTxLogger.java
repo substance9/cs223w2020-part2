@@ -11,6 +11,7 @@ public class CoordinatorTxLogger {
 
     private Connection dbCon;
     private int transactionId;
+    public int numCohorts = 0;
 
     public CoordinatorTxLogger(int transactionId, Connection dbCon){
         this.transactionId = transactionId;
@@ -22,15 +23,15 @@ public class CoordinatorTxLogger {
         this.transactionId = 0;
     }
 
-    public int writeTxLog(CoordinatorTxState txState){
-        return writeTxLog(transactionId, txState);
+    public int writeTxLog(CoordinatorTxState txState, int numCohorts){
+        return writeTxLog(transactionId, txState, numCohorts);
     }
 
-    public int writeTxLog(int txId, CoordinatorTxState txState){
+    public int writeTxLog(int txId, CoordinatorTxState txState, int numCohorts){
         PreparedStatement pst = null;
         int numRowsAffected = 0;
 
-        String sqlStatement = "INSERT INTO COORDINATOR_TX_LOG VALUES (?,?)";
+        String sqlStatement = "INSERT INTO COORDINATOR_TX_LOG VALUES (?,?,?)";
         try{
             pst = dbCon.prepareStatement(sqlStatement);
 
@@ -41,6 +42,7 @@ public class CoordinatorTxLogger {
             } else {
                 pst.setInt(2,2);  
             }
+            pst.setInt(3,numCohorts);
 
             numRowsAffected = pst.executeUpdate();
         } catch(Exception e){

@@ -1,4 +1,5 @@
 CREATE TABLE COORDINATOR_TX_LOG (
   TID integer NOT NULL,
-  STAT integer NOT NULL
+  STAT integer NOT NULL,
+  NUM_COHORTS integer NOT NULL
 ) ;

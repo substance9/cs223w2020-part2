@@ -23,6 +23,8 @@ public class Tx2PCCoordinator implements Runnable {
     private ArrayList<AgentClient> agentClientList;
     private Connection logDbConnection;
 
+    private boolean isRecoveryTx = false;
+
     public ProtocolDbTxEntry protocolDbTxEntry;
 
     private BlockingQueue<Message> recvMessageQueue;
@@ -49,6 +51,23 @@ public class Tx2PCCoordinator implements Runnable {
         this.protocolDbTxEntry = txEntry;
 
         this.resultLogFileName = resultDir + "/transactions/" + String.valueOf(transaction.transactionId) + "_c.txt";
+    }
+
+    public Tx2PCCoordinator(int transactionId, ProtocolDbTxEntry txEntry, int numAgents,
+            ArrayList<AgentClient> agentCList, Connection dbCon, TxProcessor txProcessor, String resultDir, boolean isRecovery) {
+        this.numAgents = numAgents;
+        this.agentClientList = agentCList;
+        this.transaction = new Transaction();
+        this.transaction.transactionId = transactionId;
+        this.logDbConnection = dbCon;
+        this.txProcessor = txProcessor;
+        this.isRecoveryTx = isRecovery;
+
+        this.recvMessageQueue = new LinkedBlockingQueue<Message>();
+
+        this.protocolDbTxEntry = txEntry;
+
+        this.resultLogFileName = resultDir + "/transactions/" + String.valueOf(transaction.transactionId) + "_c_recovery.txt";
     }
 
     public int getCorrespondAgentId(Operation op) {
@@ -136,16 +155,15 @@ public class Tx2PCCoordinator implements Runnable {
 
     private void processWithCommit(){
         resultLogger.writeln("Voting Complete, The decision is: COMMIT");
-            protocolDbTxEntry.coordinatorState = CoordinatorState.COMMITED;
-            // Write Log
-            coordinatorTxLogger.writeTxLog(CoordinatorTxState.COMMIT);
-
-            Message commitMsg = new Message(Message.MessageType.ACTCOMMIT, transaction.transactionId);
-            for (Integer agId : protocolDbTxEntry.CohortsStateMap.keySet()) {
-                AgentClient aclient = agentClientList.get(agId);
-                aclient.addMsgToSendQueue(commitMsg);
-                resultLogger.writeln("COMMIT Sent to Agent " + String.valueOf(agId));
-            }
+        protocolDbTxEntry.coordinatorState = CoordinatorState.COMMITED;
+        // Write Log
+        coordinatorTxLogger.writeTxLog(CoordinatorTxState.COMMIT, protocolDbTxEntry.numOfCohorts);
+        Message commitMsg = new Message(Message.MessageType.ACTCOMMIT, transaction.transactionId);
+        for (Integer agId : protocolDbTxEntry.CohortsStateMap.keySet()) {
+            AgentClient aclient = agentClientList.get(agId);
+            aclient.addMsgToSendQueue(commitMsg);
+            resultLogger.writeln("COMMIT Sent to Agent " + String.valueOf(agId));
+        }
     }
 
     private void processWithAbort(){
@@ -203,9 +221,31 @@ public class Tx2PCCoordinator implements Runnable {
         waitAckPhase();
 
         // Write complete log
-        coordinatorTxLogger.writeTxLog(CoordinatorTxState.COMPLETED);
+        coordinatorTxLogger.writeTxLog(CoordinatorTxState.COMPLETED,0); //num of cohorts is a hack for recovery
         resultLogger.writeln("Transaction Completed ");
 
+    }
+
+    public void processTxIn2PCRecovery() {
+        resultLogger = new ResultFileLogger(this.resultLogFileName);
+        coordinatorTxLogger = new CoordinatorTxLogger(transaction.transactionId, logDbConnection);
+        resultLogger.writeln("-------------------------------------------------");
+        resultLogger.writeln(
+                "Started Processing Recovery Transaction in 2PC Protocol" + " | Tx ID: " + String.valueOf(transaction.transactionId));
+        resultLogger.writeln(transaction.toString());
+
+        Message commitMsg = new Message(Message.MessageType.ACTCOMMIT, transaction.transactionId);
+        //TODO: improve by only send to participants, this requires improvement of reocvery process
+        for (int agId =0; agId < agentClientList.size(); agId++) {
+            AgentClient aclient = agentClientList.get(agId);
+            aclient.addMsgToSendQueue(commitMsg);
+            resultLogger.writeln("Resend COMMIT to Agent (all) " + String.valueOf(agId));
+        }
+
+        waitAckPhase();
+        // Write complete log
+        coordinatorTxLogger.writeTxLog(CoordinatorTxState.COMPLETED,0); //num of cohorts is a hack for recovery
+        resultLogger.writeln("Transaction (recovered) Completed ");
     }
 
     public void addRecvMessage(Message msg) {
@@ -239,7 +279,13 @@ public class Tx2PCCoordinator implements Runnable {
     }
 
     public void run() {
-        processTxIn2PC();
+        if(!isRecoveryTx){
+            processTxIn2PC();
+        } else {
+            processTxIn2PCRecovery();
+        }
+
+
         resultLogger.close();
 
         try {

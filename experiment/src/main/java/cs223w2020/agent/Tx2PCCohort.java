@@ -126,7 +126,7 @@ public class Tx2PCCohort implements Runnable
                     resultLogger.writeln("Commit Fail");
                 } else {
                     resultLogger.writeln("Commit Success, Write Completion Log First");
-                    int numLogsInserted = cohortTxLogger.writeTxLog(CohortTxState.PREPARED);
+                    int numLogsInserted = cohortTxLogger.writeTxLog(CohortTxState.COMPLETED);
                     if (numLogsInserted == 1){
                         sendMessage(ackMsg);
                         resultLogger.writeln("ACK is sent to Coordinator");

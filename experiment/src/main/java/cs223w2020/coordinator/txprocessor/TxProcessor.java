@@ -4,6 +4,8 @@ import java.io.IOException;
 import java.io.FileInputStream;
 import java.io.InputStream;
 import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.util.ArrayList;
@@ -19,6 +21,7 @@ import com.zaxxer.hikari.HikariDataSource;
 import java.util.concurrent.TimeUnit;
 
 import cs223w2020.coordinator.TransactionQueue;
+import cs223w2020.coordinator.txprocessor.ProtocolDbTxEntry.CoordinatorState;
 import cs223w2020.coordinator.txprocessor.ProtocolDbTxEntry.Decision;
 import cs223w2020.model.Transaction;
 
@@ -240,6 +243,44 @@ public class TxProcessor implements Runnable {
         return tx2PCProcessor;
     }
 
+    private void recoverPhase(){
+        Connection logDbCon = null;
+        try{
+            logDbCon = dBConnectionPool.getConnection();
+            logDbCon.setAutoCommit(true);
+        }catch (SQLException ex){
+            ex.printStackTrace();
+        }
+
+        String queryStr = "SELECT tid, SUM_STAT_TABLE.REAL_NUM_COHORTS FROM (SELECT tid,SUM(stat) as STAT_SUM, SUM(NUM_COHORTS) as REAL_NUM_COHORTS FROM coordinator_tx_log GROUP BY tid ) AS SUM_STAT_TABLE where SUM_STAT_TABLE.STAT_SUM = 1;";
+        PreparedStatement ps;
+        try {
+            ps = logDbCon.prepareStatement(queryStr);
+        
+            // process the results
+            ResultSet rs = ps.executeQuery();
+            while ( rs.next() )
+            {
+                Integer recoveryTid = rs.getInt("tid");
+                Integer numCohorts = rs.getInt("SUM_STAT_TABLE.REAL_NUM_COHORTS");
+
+                ProtocolDbTxEntry protocolDbTxEntry = new ProtocolDbTxEntry(recoveryTid);
+                protocolDbTxEntry.coordinatorState = CoordinatorState.COMMITED;
+                protocolDbTxEntry.numOfCohorts = numCohorts;
+                syncProtocolDBPut(recoveryTid, protocolDbTxEntry);
+                Tx2PCCoordinator tx2PCProcessor = new Tx2PCCoordinator(recoveryTid, protocolDbTxEntry, numAgents, agentClientList, logDbCon, this, resultDir, true);
+
+                syncProcessorMapPut(recoveryTid, tx2PCProcessor);
+                tx2PCCoordinatorThreadPool.execute(tx2PCProcessor);
+                System.out.println("Put The Recovery Transaction " + String.valueOf(recoveryTid) + "to execution Queue");
+            }
+            rs.close();
+            ps.close();
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
+
     public void run() {
         for (int i = 0; i < numAgents; i++) {
             AgentClient aclient = agentClientList.get(i);
@@ -247,6 +288,9 @@ public class TxProcessor implements Runnable {
             agentClientThreadList.add(acThread);
             acThread.start();
         }
+
+        // Recovery Process
+        recoverPhase();
 
         Transaction tx = null;
         while (true) {

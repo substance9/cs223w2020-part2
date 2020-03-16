@@ -10,6 +10,8 @@ import java.net.Socket;
 import java.net.SocketException;
 import java.net.SocketTimeoutException;
 import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.Properties;
@@ -158,6 +160,9 @@ public class AgentServer {
     }
 
     public void start() {
+        //recovery process
+        
+
         System.out.println("Starting AgentServer @port: " + String.valueOf(appPort));
 
         try {
@@ -275,8 +280,49 @@ public class AgentServer {
 
         else{
             int txId = msg.transactionId;
-            Tx2PCCohort cohort = txCohortMap.get(txId);
-            cohort.addRecvMessage(msg);
+            if(txCohortMap.containsKey(txId)){
+                Tx2PCCohort cohort = txCohortMap.get(txId);
+                cohort.addRecvMessage(msg);
+            }else{
+                //a reocvery commit message that is possible for this agent (need to query log to make sure)
+                Connection logDbCon = null;
+                try{
+                    logDbCon = logDBConnectionPool.getConnection();
+                    logDbCon.setAutoCommit(true);
+                }catch (SQLException ex){
+                    ex.printStackTrace();
+                }
+
+                String queryStr = "SELECT * FROM cohort_tx_log where tid = ? ;";
+                PreparedStatement ps;
+                int rCounter = 0;
+                try {
+                    ps = logDbCon.prepareStatement(queryStr);
+                    ps.setInt(1, txId);
+                
+                    // process the results
+                    ResultSet rs = ps.executeQuery();
+                    while ( rs.next() )
+                    {
+                        rCounter++;
+                    }
+                    rs.close();
+                    ps.close();
+                } catch (SQLException e) {
+                    e.printStackTrace();
+                }
+
+                if (rCounter==0){
+                    //never execute this transaction, ignore the message
+                    return;
+                }
+                else{
+                    //ACK the transaction again. (note that, at current stage the transaction is commited, becuase it is not in active transaction set.)
+                    //(if it is an active transaction, it would be forwarded to the corresponding Tx2PCCohort earlier)
+                    Message ackMsg = new Message(MessageType.ACTCOMMIT, txId);
+                    addMsgToSendQueue(ackMsg);
+                }
+            }
         }
     }
     
