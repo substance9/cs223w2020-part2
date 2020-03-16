@@ -19,6 +19,7 @@ import com.zaxxer.hikari.HikariDataSource;
 import java.util.concurrent.TimeUnit;
 
 import cs223w2020.coordinator.TransactionQueue;
+import cs223w2020.coordinator.txprocessor.ProtocolDbTxEntry.Decision;
 import cs223w2020.model.Transaction;
 
 public class TxProcessor implements Runnable {
@@ -166,6 +167,29 @@ public class TxProcessor implements Runnable {
         }
 
         return count;
+    }
+
+    public Decision syncGetTxDecisionProtocolDB(int tid) {
+        Decision decision = null;
+        try {
+            ProtocolDBSem.acquire();
+
+            try {
+                if(!protocolDB.containsKey(tid)){
+                    decision = Decision.ABORT;
+                }else{
+                    decision = protocolDB.get(tid).decision;
+                }
+            } finally {
+                ProtocolDBSem.release();
+            }
+
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+
+        return decision;
+
     }
 
     public void syncProcessorMapPut(int tid, Tx2PCCoordinator tx2PCProcessor) {

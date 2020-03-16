@@ -59,7 +59,7 @@ class AgentClient implements Runnable {
 
     }
 
-    public void sendMessage(Message msg) {
+    private void sendMessage(Message msg) {
         String msgStr = serializeObj(msg);
 
         out.println(msgStr);
