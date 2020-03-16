@@ -1,14 +1,11 @@
 .DS_Store
 .vscode/
-postgres_data/
-mysql_data/
 inputs/
 */.gradle/
 .gradle/
 */build/
 */experiment.properties
 experiment/bin
-results/*
 */output.txt
 *.csv
 *.txt
