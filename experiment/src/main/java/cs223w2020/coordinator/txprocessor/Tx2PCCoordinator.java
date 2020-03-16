@@ -153,7 +153,7 @@ public class Tx2PCCoordinator implements Runnable {
         return Decision.COMMIT;
     }
 
-    private void processWithCommit(){
+    private Message processWithCommit(){
         resultLogger.writeln("Voting Complete, The decision is: COMMIT");
         protocolDbTxEntry.coordinatorState = CoordinatorState.COMMITED;
         // Write Log
@@ -164,9 +164,11 @@ public class Tx2PCCoordinator implements Runnable {
             aclient.addMsgToSendQueue(commitMsg);
             resultLogger.writeln("COMMIT Sent to Agent " + String.valueOf(agId));
         }
+
+        return commitMsg;
     }
 
-    private void processWithAbort(){
+    private Message processWithAbort(){
         resultLogger.writeln("Voting Complete, The decision is: ABORT");
         protocolDbTxEntry.coordinatorState = CoordinatorState.ABORTED;
         Message abortMsg = new Message(Message.MessageType.ACTABORT, transaction.transactionId);
@@ -175,13 +177,27 @@ public class Tx2PCCoordinator implements Runnable {
             aclient.addMsgToSendQueue(abortMsg);
             resultLogger.writeln("ABORT Sent to Agent " + String.valueOf(agId));
         }
+
+        return abortMsg;
     }
 
-    private void waitAckPhase(){
+    private void waitAckPhase(Message msg){
         while (protocolDbTxEntry.numOfAcked < protocolDbTxEntry.numOfCohorts) {
             resultLogger.writeln("Wait for ACKs, " + String.valueOf(protocolDbTxEntry.numOfAcked) + " out of "
                     + String.valueOf(protocolDbTxEntry.numOfCohorts) + " Acked");
-            Message recvMsg = takeRecvMessage();
+            Message recvMsg = takeRecvMessageWTimeout(ackTimeoutMs);
+
+            while(recvMsg == null){
+                for (Integer agId : protocolDbTxEntry.CohortsStateMap.keySet()) {
+                    CohortsState coState = protocolDbTxEntry.CohortsStateMap.get(agId);
+                    if (coState != CohortsState.COMMITED && coState != CohortsState.ABORTED ){
+                        AgentClient aClient = agentClientList.get(agId);
+                        aClient.addMsgToSendQueue(msg);
+                    }
+                }
+                recvMsg = takeRecvMessageWTimeout(ackTimeoutMs);
+            }
+
             int cohortId = recvMsg.agentId;
             if (recvMsg.type != MessageType.ACK) {
                 ;
@@ -210,15 +226,16 @@ public class Tx2PCCoordinator implements Runnable {
 
         Decision decision = sendPrepareAndWaitPhase();
         // the protocolDbTxEntry.decision need to be set properly in preparePhase()
-        
+        Message msg = null;
+
         if (decision == Decision.COMMIT){
-            processWithCommit();
+            msg = processWithCommit();
         } else{
             // Abort
-            processWithAbort();
+            msg = processWithAbort();
         }
 
-        waitAckPhase();
+        waitAckPhase(msg);
 
         // Write complete log
         coordinatorTxLogger.writeTxLog(CoordinatorTxState.COMPLETED,0); //num of cohorts is a hack for recovery
